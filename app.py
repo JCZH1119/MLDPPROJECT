@@ -2,36 +2,94 @@ import streamlit as st
 import numpy as np
 import joblib
 
+# Load model using joblib
 model = joblib.load("random_forest_model.pkl")
 
-st.title("HDB Resale Price Prediction")
+st.set_page_config(page_title="HDB Resale Price Predictor", layout="centered")
 
-st.write("Enter the property details below:")
+st.title("🏠 HDB Resale Price Predictor")
+st.markdown("Fill in the property details below to get an estimated resale price.")
 
-floor_area_sqm = st.number_input("Floor Area (sqm)", min_value=10.0, max_value=300.0, value=70.0)
-cbd_dist = st.number_input("Distance to CBD (km)", min_value=0.0, max_value=50.0, value=10.0)
-year = st.number_input("Transaction Year", min_value=1990, max_value=2030, value=2023)
-lease_commence_date = st.number_input("Lease Commencement Year", min_value=1960, max_value=2030, value=2000)
-latitude = st.number_input("Latitude", min_value=1.0, max_value=2.0, value=1.35)
-longitude = st.number_input("Longitude", min_value=103.0, max_value=104.0, value=103.8)
-closest_mrt_dist = st.number_input("Distance to Closest MRT (km)", min_value=0.0, max_value=10.0, value=0.5)
-remaining_lease_years = st.number_input("Remaining Lease (years)", min_value=0.0, max_value=99.0, value=80.0)
-storey_mid = st.selectbox("Is Storey Mid-Level?", options=[0, 1])  # 1 for Yes, 0 for No
+# ========================
+# 🔢 Property Characteristics
+# ========================
+st.header("🏘️ Property Info")
 
-input_data = np.array([[
-    latitude,
-    longitude,
-    closest_mrt_dist,
-    cbd_dist,
-    floor_area_sqm,
-    lease_commence_date,
-    year,
-    0,  
-    remaining_lease_years,
-    storey_mid
-]])
+floor_area_sqm = st.number_input(
+    "Floor Area (sqm)", 
+    min_value=10.0, max_value=300.0, value=70.0,
+    help="Typical HDB flats range from 30 to 150 sqm"
+)
 
-# Prediction
-if st.button("Predict Resale Price"):
+storey_mid = st.radio(
+    "Storey Level",
+    options=[1, 0],
+    format_func=lambda x: "Mid Floor (4–6)" if x == 1 else "Other",
+    help="Mid floors are often more desirable"
+)
+
+# ========================
+# 📍 Location Characteristics
+# ========================
+st.header("📍 Location Info")
+
+cbd_dist = st.slider(
+    "Distance to CBD (km)", 
+    min_value=0.0, max_value=30.0, value=10.0,
+    help="Central Business District (e.g., Raffles Place)"
+)
+
+closest_mrt_dist = st.slider(
+    "Distance to Closest MRT (km)", 
+    min_value=0.0, max_value=5.0, value=0.5,
+    help="Proximity to public transport increases value"
+)
+
+# ========================
+# 📅 Lease Info
+# ========================
+st.header("📅 Lease & Transaction")
+
+lease_commence_date = st.number_input(
+    "Lease Commencement Year", 
+    min_value=1960, max_value=2030, value=2000
+)
+
+year = st.number_input(
+    "Transaction Year", 
+    min_value=1990, max_value=2030, value=2023
+)
+
+remaining_lease_years = st.slider(
+    "Remaining Lease (years)", 
+    min_value=0.0, max_value=99.0, value=80.0,
+    help="HDB flats have a 99-year lease"
+)
+
+# ========================
+# 📈 Prediction
+# ========================
+if st.button("🔍 Predict Resale Price"):
+    # Order of features: 
+    # 0: closest_mrt_dist
+    # 1: cbd_dist
+    # 2: floor_area_sqm
+    # 3: lease_commence_date
+    # 4: year
+    # 5: [placeholder]
+    # 6: remaining_lease_years
+    # 7: storey_mid
+
+    input_data = np.array([[
+        closest_mrt_dist,
+        cbd_dist,
+        floor_area_sqm,
+        lease_commence_date,
+        year,
+        0,  # Placeholder (for removed feature index 7)
+        remaining_lease_years,
+        storey_mid
+    ]])
+
     prediction = model.predict(input_data)
-    st.success(f"Estimated Resale Price: ${prediction[0]:,.2f}")
+    st.success(f"💰 Estimated Resale Price: **${prediction[0]:,.2f}**")
