@@ -1,93 +1,67 @@
-import streamlit as st
+import pandas as pd
 import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split, GridSearchCV, KFold
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import joblib
 
-# Load model using joblib
-model = joblib.load("random_forest_model.pkl")
+# Load your dataset
+df = pd.read_csv("your_clean_data.csv")
 
-st.set_page_config(page_title="HDB Resale Price Predictor", layout="centered")
+# Use only these 10 features — match Streamlit order
+feature_cols = [
+    "latitude",  # even if dummy
+    "longitude",  # even if dummy
+    "closest_mrt_dist",
+    "cbd_dist",
+    "floor_area_sqm",
+    "lease_commence_date",
+    "year",
+    "dummy_7",  # unused or always 0
+    "remaining_lease_years",
+    "storey_mid"
+]
 
-st.title("🏠 HDB Resale Price Predictor")
-st.markdown("Fill in the property details below to get an estimated resale price.")
+# Ensure dummy columns exist
+if "dummy_7" not in df.columns:
+    df["dummy_7"] = 0
+if "latitude" not in df.columns:
+    df["latitude"] = 0
+if "longitude" not in df.columns:
+    df["longitude"] = 0
 
-# ========================
-# 🔢 Property Characteristics
-# ========================
-st.header("🏘️ Property Info")
+X = df[feature_cols]
+y = df["resale_price"]  # or your target column
 
-floor_area_sqm = st.number_input(
-    "Floor Area (sqm)", 
-    min_value=10.0, max_value=300.0, value=85.0,
-    help="Typical HDB flats range from 30 to 150 sqm"
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
+
+# Model training
+model = RandomForestRegressor(random_state=42, n_jobs=-1)
+
+param_grid = {
+    "n_estimators": [100],
+    "max_depth": [12]
+}
+
+grid_search = GridSearchCV(
+    model,
+    param_grid,
+    cv=KFold(n_splits=3, shuffle=True, random_state=42),
+    scoring="neg_mean_squared_error",
+    n_jobs=-1,
+    verbose=1
 )
 
-storey_mid = st.radio(
-    "Storey Level",
-    options=[1, 0],
-    format_func=lambda x: "Mid Floor (4–6)" if x == 1 else "Other",
-    help="Mid floors are often more desirable"
-)
+grid_search.fit(X_train, y_train)
 
-# ========================
-# 📍 Location Characteristics
-# ========================
-st.header("📍 Location Info")
+best_model = grid_search.best_estimator_
 
-cbd_dist = st.slider(
-    "Distance to CBD (km)", 
-    min_value=0.0, max_value=30.0, value=9.5,
-    help="Distance to Central Business District (e.g., Raffles Place)"
-)
+# Evaluate
+y_pred = best_model.predict(X_test)
+print(f"MAE: {mean_absolute_error(y_test, y_pred):.2f}")
+print(f"RMSE: {np.sqrt(mean_squared_error(y_test, y_pred)):.2f}")
+print(f"R2: {r2_score(y_test, y_pred):.2f}")
 
-closest_mrt_dist = st.slider(
-    "Distance to Closest MRT (km)", 
-    min_value=0.0, max_value=5.0, value=0.3,
-    help="Proximity to public transport increases value"
-)
-
-# ========================
-# 📅 Lease Info
-# ========================
-st.header("📅 Lease & Transaction")
-
-lease_commence_date = st.number_input(
-    "Lease Commencement Year", 
-    min_value=1960, max_value=2030, value=1999
-)
-
-year = st.number_input(
-    "Transaction Year", 
-    min_value=1990, max_value=2030, value=2023
-)
-
-remaining_lease_years = st.slider(
-    "Remaining Lease (years)", 
-    min_value=0.0, max_value=99.0, value=74.0,
-    help="HDB flats have a 99-year lease"
-)
-
-0
-if st.button("🔍 Predict Resale Price"):
-    # Match exact order expected by the model
-    # Index order: [latitude, longitude, closest_mrt_dist, cbd_dist, floor_area_sqm,
-    #               lease_commence_date, year, ?, remaining_lease_years, storey_mid]
-
-    input_data = np.array([[
-        0.0,  # Dummy latitude
-        0.0,  # Dummy longitude
-        closest_mrt_dist,
-        cbd_dist,
-        floor_area_sqm,
-        lease_commence_date,
-        year,
-        0,  # Placeholder for index 7
-        remaining_lease_years,
-        storey_mid
-    ]])
-
-    try:
-        prediction = model.predict(input_data)
-        st.success(f"💰 Estimated Resale Price: **${prediction[0]:,.2f}**")
-    except Exception as e:
-        st.error("Prediction failed. Check that your model input size matches.")
-        st.exception(e)
+# Save the model
+joblib.dump(best_model, "random_forest_model.pkl", compress=("xz", 9))
+print("Model saved as random_forest_model.pkl")
